@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <link rel="manifest" href="manifest.json">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bass Fretboard Trainer</title>
+    <link rel="manifest" href="manifest.json">
     <style>
         /* --- STILI GLOBALI --- */
         :root {
@@ -26,7 +26,7 @@
             padding: 20px;
             display: flex;
             justify-content: center;
-            align-items: flex-start; /* Allinea in alto per vedere i puntini */
+            align-items: flex-start;
             min-height: 100vh;
             box-sizing: border-box;
         }
@@ -35,7 +35,7 @@
             width: 100%;
             max-width: 900px;
             text-align: center;
-            padding-top: 40px; /* Spazio per i puntini sopra */
+            padding-top: 40px;
         }
         
         /* --- SCHERMATE --- */
@@ -78,16 +78,15 @@
             font-size: 1.2em;
             font-weight: bold;
             box-sizing: border-box;
-            position: relative; /* Necessario per i puntini */
+            position: relative;
         }
 
         .fretboard th { color: var(--primary-color); }
         
-        /* --- MODIFICA PUNTINI --- */
         .fretboard .dot::after {
             content: '●';
             position: absolute;
-            top: -30px; /* Spostato sopra */
+            top: -30px;
             left: 50%;
             transform: translateX(-50%);
             font-size: 1.2em;
@@ -96,12 +95,6 @@
         .fretboard .double-dot::after {
             content: '● ●';
             letter-spacing: -5px;
-            position: absolute;
-            top: -30px; /* Spostato sopra */
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 1.2em;
-            color: var(--border-color);
         }
 
         .string-name { background-color: var(--secondary-color); color: var(--primary-color); }
@@ -199,9 +192,8 @@ document.addEventListener('DOMContentLoaded', () => {
         international: ['G', 'G#', 'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#'],
         italian: ['Sol', 'Sol#', 'La', 'La#', 'Si', 'Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#']
     };
-    // Mappa per la logica interna (usa sempre i nomi internazionali)
     const STRINGS = { 'G': 0, 'D': 7, 'A': 2, 'E': 9 };
-    const STRING_ORDER = ['G', 'D', 'A', 'E']; // Ordine di visualizzazione dall'alto
+    const STRING_ORDER = ['G', 'D', 'A', 'E'];
     const STRING_TRANSLATIONS = {
         international: { E: 'E', A: 'A', D: 'D', G: 'G' },
         italian:       { E: 'Mi', A: 'La', D: 'Re', G: 'Sol' }
@@ -211,15 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let appState = {
         settings: { notation: 'international' },
-        guessMode: {
-            config: { strings: [], fretRange: { start: 1, end: 12 } },
-            currentQuestion: {},
-            timeoutId: null
-        },
-        findMode: {
-            targetNote: null,
-            userSelection: []
-        }
+        guessMode: { config: { strings: [], fretRange: { start: 1, end: 12 } }, currentQuestion: {}, timeoutId: null },
+        findMode: { targetNote: null, userSelection: [] }
     };
     
     const screens = document.querySelectorAll('.screen');
@@ -231,11 +216,55 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkFindAnswerBtn = document.getElementById('check-find-answer-btn');
     const nextFindQuestionBtn = document.getElementById('next-find-question-btn');
 
+    // --- NUOVA CONFIGURAZIONE AUDIO ---
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const noteFrequencies = {
+        'C': 65.41, 'C#': 69.30, 'D': 73.42, 'D#': 77.78, 'E': 82.41, 'F': 87.31,
+        'F#': 92.50, 'G': 98.00, 'G#': 103.83, 'A': 110.00, 'A#': 116.54, 'B': 123.47,
+        'Do': 65.41, 'Do#': 69.30, 'Re': 73.42, 'Re#': 77.78, 'Mi': 82.41, 'Fa': 87.31,
+        'Fa#': 92.50, 'Sol': 98.00, 'Sol#': 103.83, 'La': 110.00, 'La#': 116.54, 'Si': 123.47
+    };
 
+    // SOSTITUISCI CON QUESTO NUOVO BLOCCO
+function playSound(noteName, duration = 0.6) {
+    if (!audioContext || !noteFrequencies[noteName]) return;
+    if (audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+
+    // 1. Oscillatore: la fonte del suono. Usiamo ancora 'sawtooth' per la sua ricchezza.
+    const oscillator = audioContext.createOscillator();
+    oscillator.type = 'square';
+    oscillator.frequency.setValueAtTime(noteFrequencies[noteName], audioContext.currentTime);
+
+    // 2. Filtro: il "modellatore" del tono. Togliamo le frequenze aspre.
+    const filter = audioContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(600, audioContext.currentTime); // Valore chiave! Più basso = più cupo.
+
+    // 3. GainNode: controlla il volume e l'inviluppo.
+    const gainNode = audioContext.createGain();
+
+    // 4. Colleghiamo tutto in catena: Suono -> Filtro -> Volume -> Altoparlanti
+    oscillator.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    // 5. Inviluppo migliorato: attacco deciso e decadimento più naturale.
+    const now = audioContext.currentTime;
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.7, now + 0.01); // Attacco molto rapido e forte ("pluck")
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration); // Decadimento esponenziale, più naturale.
+
+    // Avvia e ferma il suono
+    oscillator.start(now);
+    oscillator.stop(now + duration);
+}
+
+    // --- FUNZIONI DI NAVIGAZIONE E INIZIALIZZAZIONE ---
     window.navigateTo = (screenId) => {
         screens.forEach(s => s.classList.remove('active'));
         document.getElementById(screenId).classList.add('active');
-        
         if (screenId === 'find-mode-game-screen') startFindMode();
         if (screenId === 'guess-mode-setup-screen') setupStringSelector();
     };
@@ -244,9 +273,16 @@ document.addEventListener('DOMContentLoaded', () => {
         loadSettings();
         checkFindAnswerBtn.addEventListener('click', checkFindAnswer);
         nextFindQuestionBtn.addEventListener('click', askFindQuestion);
+        // Attiva l'audio al primo tocco per compatibilità con i browser mobile
+        document.body.addEventListener('click', () => {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }, { once: true });
         navigateTo('menu-screen');
     }
 
+    // --- FUNZIONI COMUNI ---
     function createFretboard(container, isClickable = false) {
         let table = '<table class="fretboard"><thead><tr><th></th>';
         for(let i = 1; i <= FRET_COUNT; i++) {
@@ -269,9 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = table;
         
         if (isClickable) {
-            container.querySelectorAll('.fret-cell').forEach(cell => {
-                cell.addEventListener('click', handleFretClick);
-            });
+            container.querySelectorAll('.fret-cell').forEach(cell => cell.addEventListener('click', handleFretClick));
         }
     }
     
@@ -288,11 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '';
         STRING_ORDER.forEach(stringName => {
             const displayName = translations[stringName];
-            container.innerHTML += `
-                <label>
-                    <input type="checkbox" name="string" value="${stringName}" checked> ${displayName}
-                </label>
-            `;
+            container.innerHTML += `<label><input type="checkbox" name="string" value="${stringName}" checked> ${displayName}</label>`;
         });
     }
 
@@ -342,7 +372,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const cell = fretboardContainerGuess.querySelector(`[data-string="${randomString}"][data-fret="${randomFret}"]`);
         cell.classList.add('highlight');
-
         appState.guessMode.currentQuestion = { note: correctNote, cellElement: cell };
     }
     
@@ -353,7 +382,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.note-button').forEach(b => b.disabled = true);
         cellElement.classList.remove('highlight');
         cellElement.textContent = note;
-        
+        playSound(note);
+
         if (selectedNote === note) {
             feedbackGuessEl.textContent = 'Corretto!';
             feedbackGuessEl.className = 'feedback-message feedback-correct';
@@ -363,7 +393,6 @@ document.addEventListener('DOMContentLoaded', () => {
             feedbackGuessEl.className = 'feedback-message feedback-incorrect';
             cellElement.classList.add('feedback-incorrect');
         }
-        
         appState.guessMode.timeoutId = setTimeout(askGuessQuestion, 2000);
     }
 
@@ -382,6 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.findMode.userSelection = [];
         const notes = NOTES_DATA[appState.settings.notation];
         appState.findMode.targetNote = notes[Math.floor(Math.random() * notes.length)];
+        playSound(appState.findMode.targetNote);
         
         findTitleEl.textContent = `Trova tutte le note "${appState.findMode.targetNote}"`;
         checkFindAnswerBtn.style.display = 'inline-block';
@@ -407,12 +437,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function checkFindAnswer() {
         const { targetNote, userSelection } = appState.findMode;
-        
         fretboardContainerFind.querySelectorAll('.fret-cell').forEach(cell => {
             const string = cell.dataset.string;
             const fret = parseInt(cell.dataset.fret);
             const correctNote = getNoteForFret(string, fret);
-            
             const isCorrect = correctNote === targetNote;
             const isSelected = userSelection.some(s => s.string === string && s.fret === fret);
             
@@ -421,7 +449,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isCorrect && isSelected) cell.classList.add('feedback-correct');
             else if (!isCorrect && isSelected) cell.classList.add('feedback-incorrect');
             else if (isCorrect && !isSelected) cell.classList.add('feedback-missed');
-            
             if(isCorrect) cell.textContent = correctNote;
         });
 
@@ -446,18 +473,16 @@ document.addEventListener('DOMContentLoaded', () => {
     init();
 });
 </script>
+
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js')
-                .then(registration => {
-                    console.log('Service Worker registrato con successo:', registration);
-                })
-                .catch(err => {
-                    console.log('Registrazione del Service Worker fallita:', err);
-                });
+                .then(registration => console.log('Service Worker registrato:', registration))
+                .catch(err => console.log('Registrazione Service Worker fallita:', err));
         });
     }
 </script>
+
 </body>
 </html>
