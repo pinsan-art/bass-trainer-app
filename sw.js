@@ -1,6 +1,6 @@
 const CACHE_NAME = 'bass-trainer-v1';
 const URLS_TO_CACHE = [
-  './index.html' 
+  '.' 
   // Se avessi file CSS e JS separati, li aggiungeresti qui
 ];
 
