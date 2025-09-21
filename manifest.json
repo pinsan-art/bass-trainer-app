@@ -1,0 +1,21 @@
+{
+  "name": "Bass Fretboard Trainer",
+  "short_name": "Bass Trainer",
+  "start_url": "./bass-trainer.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#FFFF00",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
